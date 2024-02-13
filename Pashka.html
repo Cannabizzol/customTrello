@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link href="css/pashka.css" rel="stylesheet">
+</head>
+<body>
+<div class="main">
+    <div class="top-wrapper">
+        <div class="progress-bar">
+            <div class="progress"></div>
+            <span>Выполнено:</span>
+        </div>
+        <div class="recording-btn-wrapper">
+            <button class="recording-btn">Найти</button>
+            <button class="recording-btn">Действие</button>
+        </div>
+    </div>
+    <div class="columns">
+        <div data-column-name="myTask" class="tasks-wrapper">
+            <h2>Мои задачи</h2>
+            <span class="task-list-length"></span>
+            <ul class="task-list" ondragover="onDragOver(event)" ondrop="onDrop(event);">
+            </ul>
+        </div>
+        <div data-column-name="taskInProgress" class="tasks-wrapper">
+            <h2>В процессе</h2>
+            <span class="task-list-length"></span>
+            <ul class="task-list" ondragover="onDragOver(event)" ondrop="onDrop(event);">
+            </ul>
+        </div>
+        <div data-column-name="taskDone" class="tasks-wrapper">
+            <h2>Выполнено</h2>
+            <span class="task-list-length"></span>
+            <ul class="task-list" ondragover="onDragOver(event)" ondrop="onDrop(event);">
+            </ul>
+        </div>
+        <div data-column-name="proebano" class="tasks-wrapper proebano">
+            <h2>Proebano</h2>
+            <span class="task-list-length"></span>
+            <ul class="task-list">
+            </ul>
+        </div>
+    </div>
+    <div class="form-modal">
+        <form class="add-task" action="#" method="post">
+            <div class="add-task-input-wrapper">
+                <input class="add-task-input" type="text" aria-label="Описание задачи" placeholder="Введи задачу"
+                       required>
+                <input class="add-task-input timer" type="number" aria-label="Описание задачи"
+                       placeholder="Введи время выполнения"
+                       required>
+            </div>
+            <button class="add-task-button" type="submit">Добавить задачу</button>
+        </form>
+    </div>
+
+</div>
+
+<template id="tasks-template">
+    <li class="task-list-item" id="task-list-item-draggable"
+        draggable="true"
+        ondragstart="onDragstart(event)">
+        <label class="task-list-label">
+            <span></span>
+            <form class="task-list-editing">
+                <textarea class="task-list-editing-input" type="text" aria-label="Описание задачи"
+                          placeholder="" content="" required></textarea>
+                <button class="task-list-save-btn" type="button"> Сохранить</button>
+            </form>
+        </label>
+        <button class="task-list-input" type="button">x</button>
+        <button class="task-list-editing-btn" type="button"> R</button>
+    </li>
+
+</template>
+
+<script>
+    function levenshteinDistance(a, b) {
+        const lenA = a.length;
+        const lenB = b.length;
+
+        if (lenA === 0) return lenB;
+        if (lenB === 0) return lenA;
+
+        const matrix = [];
+
+        // Инициализация матрицы
+        for (let i = 0; i <= lenA; i++) {
+            matrix[i] = [i];
+        }
+
+        for (let j = 0; j <= lenB; j++) {
+            matrix[0][j] = j;
+        }
+
+        // Вычисление расстояния Левенштейна
+        for (let i = 1; i <= lenA; i++) {
+            for (let j = 1; j <= lenB; j++) {
+                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,     // Удаление
+                    matrix[i][j - 1] + 1,     // Вставка
+                    matrix[i - 1][j - 1] + cost  // Замена или совпадение
+                );
+            }
+        }
+
+        // Расчет процента совпадения
+        const maxLen = Math.max(lenA, lenB);
+        const distance = matrix[lenA][lenB];
+        const similarity = ((maxLen - distance) / maxLen) * 100;
+        return similarity.toFixed(2); // Округляем до двух знаков после запятой
+    }
+
+    function findMostSimilarString(strings, target) {
+        const arr = [];
+        for (let i = 0; i < strings.length; i++) {
+            arr.push({
+                index: i,
+                value: levenshteinDistance(strings[i], target)
+            });
+        }
+
+        const max = Math.max(...arr.map(arr => arr.value));
+
+        return strings[arr.find((arr) => arr.value == max).index];
+    }
+
+    // Пример использования
+
+    const words = ["кот", "котик", "кошка", "собака"];
+    const targetWord = "чмо";
+    const mostSimilar = findMostSimilarString(words, targetWord);
+    console.log(`Самая похожая строка на "${targetWord}": ${mostSimilar}`)
+
+    /////////////////
+
+    let recordingBtn = document.querySelector('.recording-btn');
+    let recognition = new webkitSpeechRecognition() || new SpeechRecognition();
+
+    // recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recordingBtn.addEventListener('click', function () {
+        recognition.start();
+    })
+
+    let resultVoiceText = null;
+
+    recognition.onresult = event => {
+        const result = event.results[event.results.length - 1][0].transcript;
+        // outputDiv.textContent = result;
+        resultVoiceText = result;
+        recognition.stop();
+    };
+
+    recognition.onend = () => {
+        let arrayTasksContent = []
+        for (let i = 0; i < columns.length; i++) {
+            let obj = JSON.parse(localStorage.getItem(columns[i]))
+            for (let j = 0; j < obj.length; j++) {
+                arrayTasksContent.push(obj[j].value)
+            }
+        }
+
+        let findTask = findMostSimilarString(arrayTasksContent, resultVoiceText);
+        if (levenshteinDistance(findTask, resultVoiceText) < 70) {
+            alert('Задача не найдена')
+            return;
+        }
+        for (let i = 0; i < columns.length; i++) {
+            let obj = JSON.parse(localStorage.getItem(columns[i]))
+            for (let j = 0; j < obj.length; j++) {
+                let task = document.querySelector(`#${obj[j].id}`)
+                task.classList.remove('selected')
+            }
+        }
+        for (let i = 0; i < columns.length; i++) {
+            let obj = JSON.parse(localStorage.getItem(columns[i]))
+            for (let j = 0; j < obj.length; j++) {
+                if (obj[j].value === findTask) {
+                    let task = document.querySelector(`#${obj[j].id}`)
+                    task.classList.add('selected')
+                }
+            }
+        }
+    };
+
+
+    let template = document.querySelector('#tasks-template').content;
+    let taskItem = template.querySelector('.task-list-item');
+    let tasksWrapper = document.querySelector('.tasks-wrapper');
+    let taskAddBtn = document.querySelector('.add-task-button');
+    let taskList = tasksWrapper.querySelector('.task-list');
+    let columns = ['myTask', 'taskInProgress', 'taskDone', 'proebano'];
+    let onDragCurrentColumnName = null;
+
+    let incrementOrGetId = function (increment = false) {
+        if (increment) {
+            localStorage.setItem('lastId', ++i);
+            return i;
+        }
+
+        return +localStorage.getItem('lastId');
+    }
+    let initializeLocalStorage = function (columns) {
+        for (let i = 0; i < columns.length; i++) {
+            if (!localStorage.getItem(columns[i])) {
+                localStorage.setItem(columns[i], JSON.stringify([]));
+            }
+        }
+
+        if (!localStorage.getItem('lastId')) {
+            localStorage.setItem('lastId', 0);
+        }
+    }
+
+
+    let tasksLength = function () {
+        let lengthArray = [];
+        for (let i = 0; i < columns.length; i++) {
+            if (localStorage.getItem(columns[i])) {
+                let obj = {};
+                obj.id = columns[i];
+                obj.length = JSON.parse(localStorage.getItem(columns[i])).length;
+                lengthArray.push(obj)
+            }
+        }
+        return lengthArray;
+    }
+
+    let sumTasks = function (taskLength) {
+        let sum = 0;
+        for (let i = 0; i < taskLength.length; i++) {
+            let tasks = taskLength[i].length
+            sum += tasks
+        }
+        return sum;
+    }
+
+
+    let progressBar = function () {
+        let progress = document.querySelector('.progress')
+        let taskLength = tasksLength();
+        let sum = sumTasks(taskLength);
+        let finishedTasks = 0;
+        for (let i = 0; i < taskLength.length; i++) {
+            if (taskLength[i].id === 'taskDone') {
+                let obj = taskLength[i].length
+                finishedTasks += obj
+            }
+        }
+        let percent = ((finishedTasks / sum) * 100)
+        progress.style.width = `${percent}` + '%'
+        const resultPercent = Math.round(percent);
+        progress.parentElement.querySelector('span').textContent = `Выполнено ${resultPercent}` + '%'
+        if (isNaN(resultPercent)) {
+            progress.parentElement.querySelector('span').textContent = 'Задачи отсутствуют'
+        }
+    }
+    // setInterval(function () {
+    //     console.log('hello')
+    // }, 2000)
+    progressBar()
+    sumTasks(tasksLength())
+    let initializationColumnCountProgress = function () {
+        let lengthArray = tasksLength();
+        for (let i = 0; i < lengthArray.length; i++) {
+            let span = document.querySelector('[data-column-name="' + lengthArray[i].id + '"] span');
+            span.textContent = 'Количество задач: ' + lengthArray[i].length
+        }
+    }
+
+    initializeLocalStorage(columns);
+    tasksLength(columns)
+    initializationColumnCountProgress();
+
+    let i = incrementOrGetId();
+    let renderPageFromLocalStorage = function (columns) {
+        for (let i = 0; i < columns.length; i++) {
+            let columnFromLocalStorage = JSON.parse(localStorage.getItem(columns[i]));
+            for (let j = 0; j < columnFromLocalStorage.length; j++) {
+                addElement(columnFromLocalStorage[j], columns[i])
+            }
+        }
+    }
+
+    let saveEdit = function (clone) {
+        let saveBtn = clone.querySelector('.task-list-save-btn');
+        const listener = function (evt) {
+            evt.preventDefault();
+            let value = clone.querySelector('.task-list-editing-input').value
+            let label = clone.querySelector('.task-list-label');
+            let span = document.createElement('span');
+            span.textContent = value;
+            label.appendChild(span);
+            clone.querySelector('.task-list-editing').classList.remove('active');
+            saveBtn.removeEventListener('click', listener);
+            let obj = createTaskObject(clone.id, value);
+            let column = getColumnNameByTaskElement(clone)
+            deleteTaskLocalStorage(clone.id, column);
+            saveTaskInLocalStorage(obj, column);
+        };
+        saveBtn.addEventListener('click', listener)
+    }
+
+    let editTask = function (clone) {
+        let saveBtn = clone.querySelector('.task-list-editing-btn');
+        saveBtn.addEventListener('click', function (evt) {
+            evt.preventDefault();
+            clone.querySelector('.task-list-editing').classList.add('active');
+            let content = clone.querySelector('span').textContent
+            clone.querySelector('textarea').textContent = content;
+            clone.querySelector('span').remove()
+            saveEdit(clone)
+        })
+    }
+    let addElement = function (obj, columnName, generateNewId = false) {
+        let clone = taskItem.cloneNode(true);
+        clone.id = generateNewId ? clone.id + incrementOrGetId(true) : obj.id;
+        let taskSpan = clone.querySelector('span');
+        taskSpan.textContent = obj.value;
+        const columnElementUl = document.querySelector('[data-column-name="' + columnName + '"] ul');
+        columnElementUl.appendChild(clone);
+        deleteTask(clone);
+        editTask(clone);
+        return clone;
+    }
+
+    renderPageFromLocalStorage(columns);
+
+    function createTaskObject(id, taskText, lifeTime = null) {
+        let obj = {};
+        obj.id = id;
+        obj.value = taskText;
+        obj.lifeTime = lifeTime;
+        return obj;
+    }
+
+    function extractTextFromTaskElement(element) {
+        return element.querySelector('label.task-list-label > span').textContent;
+    }
+
+    let checkProebanoTask = function () {
+        let myTasks = JSON.parse(localStorage.getItem('myTask'))
+        let tasksInProgress = JSON.parse(localStorage.getItem('taskInProgress'))
+        const currentSecondTime = Math.round((new Date()).getTime() / 1000);
+        for (let i = 0; i < myTasks.length; i++) {
+            let dieTime = myTasks[i].lifeTime;
+            if (currentSecondTime >= dieTime && dieTime !== null) {
+                let taskForRemove = document.querySelector(`#${myTasks[i].id}`)
+                addElement(myTasks[i], 'proebano');
+                myTasks[i].lifeTime = null;
+                saveTaskInLocalStorage(myTasks[i], 'proebano')
+                deleteTaskLocalStorage(taskForRemove.id, getColumnNameByTaskElement(taskForRemove));
+                taskForRemove.remove();
+                progressBar()
+                initializationColumnCountProgress();
+
+                // console.log('HELO');
+            }
+        }
+    }
+    setInterval(checkProebanoTask, 500)
+
+    let setDieTime = function (taskTimer) {
+        if (taskTimer === '') {
+            return null;
+        }
+        let date = new Date(); // current moment
+        let dieTime = Math.round((date.valueOf() + (taskTimer * 1000)) / 1000)
+        return dieTime;
+    }
+
+    taskAddBtn.addEventListener('click', function (evt) {
+        evt.preventDefault();
+        let taskText = document.querySelector('.add-task-input').value
+        let taskTimer = document.querySelector('.timer').value
+        taskTimer = setDieTime(taskTimer)
+        if (taskText != '') {
+            let startObject = createTaskObject(taskItem.cloneNode(true).id, taskText, taskTimer);
+            let clone = addElement(startObject, 'myTask', true);
+            let finishedObject = createTaskObject(clone.id, taskText, taskTimer);
+            saveTaskInLocalStorage(finishedObject, 'myTask');
+            deleteTask(clone);
+            document.querySelector('.add-task-input').value = '';
+            document.querySelector('.timer').value = '';
+        }
+        initializationColumnCountProgress();
+        progressBar()
+    })
+
+
+    let saveTaskInLocalStorage = function (obj, columnName) {
+        let myTaskColumn = JSON.parse(localStorage.getItem(columnName));
+        myTaskColumn.push(obj);
+        localStorage.setItem(columnName, JSON.stringify(myTaskColumn));
+
+        // if (JSON.parse(localStorage.getItem('taskDone')).length === 0) {
+        //     let taskDone = document.querySelector('[data-column-name="taskDone"]');
+        //     taskDone.style.backgroundColor = '#F6F7F9';
+        // }
+    }
+    let deleteTaskLocalStorage = function (id, columName) {
+        let column = JSON.parse(localStorage.getItem(columName))
+        for (let i = 0; i < column.length; i++) {
+            if (column[i].id === id) {
+                column.splice(i, 1);
+                localStorage.setItem(columName, JSON.stringify(column));
+                break;
+            }
+        }
+    }
+
+    function deleteTask(message) {
+        let deleteBtn = message.querySelector('button.task-list-input');
+        deleteBtn.addEventListener('click', function (evt) {
+            evt.preventDefault()
+            deleteTaskLocalStorage(message.id, getColumnNameByTaskElement(message));
+            message.remove();
+            initializationColumnCountProgress();
+            progressBar()
+            // if (JSON.parse(localStorage.getItem('taskDone')).length === 0) {
+            //     let taskDone = document.querySelector('[data-column-name="taskDone"]');
+            //     taskDone.style.backgroundColor = '#F6F7F9';
+            // }
+        })
+    }
+
+    let getColumnNameByTaskElement = (taskElement) => {
+        return taskElement.parentElement.parentElement.getAttribute('data-column-name')
+    }
+
+    function onDragstart(event) {
+        event
+            .dataTransfer
+            .setData('text/plain', event.target.id);
+
+        onDragCurrentColumnName = getColumnNameByTaskElement(event.target)
+
+    }
+
+    function onDragOver(event) {
+        event.preventDefault()
+        const id = event
+        // .dataTransfer
+        // .getData('text');
+        // taskList.style.background = 'green';
+
+    }
+
+    function onDrop(event) {
+        const id = event
+            .dataTransfer
+            .getData('text');
+
+        const draggableElement = document.getElementById(id);
+        const dropzone = event.target;
+
+        dropzone.appendChild(draggableElement);
+
+        deleteTaskLocalStorage(id, onDragCurrentColumnName);
+        onDragCurrentColumnName = null;
+
+        saveTaskInLocalStorage(
+            createTaskObject(
+                draggableElement.id,
+                extractTextFromTaskElement(draggableElement)
+            ),
+            getColumnNameByTaskElement(draggableElement)
+        );
+        progressBar()
+        initializationColumnCountProgress();
+        // if (JSON.parse(localStorage.getItem('myTask')).length === 0 &&
+        //     JSON.parse(localStorage.getItem('taskInProgress')).length === 0 &&
+        //     JSON.parse(localStorage.getItem('taskDone')).length !== 0) {
+        //     let taskDone = document.querySelector('[data-column-name="taskDone"]');
+        //     taskDone.style.backgroundColor = 'green';
+        // }
+        event
+            .dataTransfer
+            .clearData();
+    }
+
+
+</script>
+
+</body>
+</html>
